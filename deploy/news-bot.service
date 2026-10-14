@@ -1,0 +1,30 @@
+# Bengali News Aggregator — interactive Telegram bot (long-polling worker)
+#
+# Install / update:
+#   sudo cp deploy/news-bot.service /etc/systemd/system/news-bot.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now news-bot.service
+#
+# Inspect:
+#   systemctl status news-bot.service
+#   journalctl -u news-bot.service -f
+#
+# Adjust User / paths below if the project lives elsewhere.
+
+[Unit]
+Description=Bengali News Aggregator Telegram Bot
+Documentation=https://github.com/rafidone/news-aggregator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rafid
+WorkingDirectory=/home/rafid/Auto Work/news-aggregator
+EnvironmentFile=-/home/rafid/Auto Work/news-aggregator/.env
+ExecStart="/home/rafid/Auto Work/news-aggregator/.venv/bin/python" "/home/rafid/Auto Work/news-aggregator/bot.py"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

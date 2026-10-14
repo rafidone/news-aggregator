@@ -13,3 +13,7 @@ __pycache__/
 # Logs
 cron.log
 *.log
+
+# Local database
+news.db
+*.db

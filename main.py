@@ -1,13 +1,17 @@
 """Automated Bengali news aggregator.
 
 Fetches headlines from Bengali RSS feeds, asks Gemini to pick and summarize the
-top 5 stories in Bengali, then delivers the digest over Telegram.
+top 5 stories in Bengali, then delivers each story over Telegram with an inline
+keyboard ("Read more" + "Save to favorites") and a persistent navigation menu.
 
-Run manually:  python main.py
+Run one-shot digest:   python main.py
+Run the interactive bot: python bot.py
 """
 
+import json
 import logging
 import os
+import re
 import sys
 import time
 
@@ -15,6 +19,8 @@ import feedparser
 import requests
 from dotenv import load_dotenv
 from google import genai
+
+import db
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
@@ -43,6 +49,15 @@ TOP_N = int(os.getenv("TOP_N", "5"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
 TELEGRAM_MESSAGE_LIMIT = 4096
 
+# Persistent reply-keyboard menu labels (also used as message filters in bot.py)
+MENU_PREVIOUS = "📅 গতকালের খবর"
+MENU_FAVORITES = "⭐ আমার ফেভারিট"
+REPLY_KEYBOARD = {
+    "keyboard": [[{"text": MENU_PREVIOUS}, {"text": MENU_FAVORITES}]],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -52,7 +67,7 @@ log = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
-# Steps
+# RSS fetching
 # --------------------------------------------------------------------------- #
 def fetch_news(feeds=None, max_entries=MAX_ENTRIES_PER_FEED):
     """Fetch the latest entries from each RSS feed.
@@ -77,7 +92,7 @@ def fetch_news(feeds=None, max_entries=MAX_ENTRIES_PER_FEED):
 
         try:
             parsed = feedparser.parse(response.content)
-        except Exception as exc:  # feedparser is usually lenient, but be safe
+        except Exception as exc:
             log.error("Parse error for %s: %s", url, exc)
             continue
 
@@ -101,16 +116,20 @@ def fetch_news(feeds=None, max_entries=MAX_ENTRIES_PER_FEED):
     return articles
 
 
+# --------------------------------------------------------------------------- #
+# Gemini summarization
+# --------------------------------------------------------------------------- #
 def _build_prompt(articles):
-    """Build the Bengali summarization prompt from fetched articles."""
     lines = [
         "নিচে বাংলা সংবাদ সাইট থেকে সংগৃহীত সর্বশেষ শিরোনামগুলোর একটি তালিকা দেওয়া হলো।",
-        f"এগুলো থেকে সবচেয়ে গুরুত্বপূর্ণ {TOP_N}টি সংবাদ নির্বাচন করুন এবং বাংলায় একটি সংক্ষিপ্ত সারসংক্ষেপ তৈরি করুন।",
+        f"এগুলো থেকে সবচেয়ে গুরুত্বপূর্ণ {TOP_N}টি সংবাদ নির্বাচন করুন।",
         "",
-        "আউটপুট অবশ্যই নিম্নলিখিত ফরম্যাটে বাংলায় হতে হবে:",
-        f"- প্রতিটি সংবাদের জন্য: একটি শিরোনাম, ২-৩টি বুলেট পয়েন্টে সারসংক্ষেপ, এবং মূল সংবাদের লিংক।",
-        "- গুরুত্ব অনুসারে নিউজগুলো সাজান।",
-        "- কোনো ভূমিকা বা অতিরিক্ত ব্যাখ্যা লিখবেন না, শুধু ডাইজেস্ট দিন।",
+        "শুধুমাত্র একটি JSON array রিটার্ন করুন, কোনো অতিরিক্ত লেখা বা ব্যাখ্যা নয়।",
+        "প্রতিটি element নিম্নলিখিত ফরম্যাটে হবে:",
+        '{"index": <তালিকায় সংবাদের নম্বর>, "title": "<স্পষ্ট বাংলা শিরোনাম>", '
+        '"summary": "<২-৩টি বাক্য/বুলেটের বাংলা সারসংক্ষেপ, প্রতিটি বুলেট নতুন লাইনে \'• \' দিয়ে শুরু>"}',
+        "",
+        "গুরুত্ব অনুসারে সংবাদগুলো সাজান। লিংক নিজে বানাবেন না।",
         "",
         "সংবাদ তালিকা:",
     ]
@@ -118,14 +137,12 @@ def _build_prompt(articles):
         lines.append(
             f"{i}. শিরোনাম: {art['title']}\n"
             f"   সারসংক্ষেপ: {art['summary'][:400]}\n"
-            f"   সূত্র: {art['source']}\n"
-            f"   লিংক: {art['link']}"
+            f"   সূত্র: {art['source']}"
         )
     return "\n".join(lines)
 
 
 def _model_candidates():
-    """Ordered, de-duplicated list of models to try (primary first)."""
     models = [GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]
     seen = []
     for m in models:
@@ -135,7 +152,7 @@ def _model_candidates():
 
 
 def summarize_news(articles, retries=3):
-    """Ask Gemini to select and summarize the top news items in Bengali."""
+    """Ask Gemini to select/summarize the top stories. Returns a list of items."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set.")
     if not articles:
@@ -158,7 +175,7 @@ def summarize_news(articles, retries=3):
                 )
                 text = (getattr(response, "output_text", "") or "").strip()
                 if text:
-                    return text
+                    return _parse_items(text, articles)
                 last_error = "Empty response from Gemini."
             except Exception as exc:
                 last_error = exc
@@ -173,8 +190,116 @@ def summarize_news(articles, retries=3):
     raise RuntimeError(f"Gemini summarization failed: {last_error}")
 
 
+def _strip_code_fence(text):
+    text = text.strip()
+    text = re.sub(r"^```[a-zA-Z0-9]*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def _parse_items(text, articles):
+    """Parse Gemini's JSON into normalized items, mapping back to source URLs."""
+    cleaned = _strip_code_fence(text)
+    start, end = cleaned.find("["), cleaned.rfind("]")
+    data = None
+    if start != -1 and end != -1 and end > start:
+        try:
+            data = json.loads(cleaned[start : end + 1])
+        except json.JSONDecodeError:
+            data = None
+
+    items = []
+    if isinstance(data, list):
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            source_article = None
+            try:
+                idx = int(entry.get("index"))
+                if 1 <= idx <= len(articles):
+                    source_article = articles[idx - 1]
+            except (TypeError, ValueError):
+                pass
+            title = (entry.get("title") or "").strip()
+            summary = entry.get("summary")
+            if isinstance(summary, list):
+                summary = "\n".join(f"• {str(s).strip()}" for s in summary)
+            summary = (summary or "").strip()
+            items.append(
+                {
+                    "title": title or (source_article or {}).get("title", ""),
+                    "summary": summary,
+                    "url": (source_article or {}).get("link", ""),
+                    "source": (source_article or {}).get("source", ""),
+                }
+            )
+
+    if not items:
+        # Fallback: keep the raw model text as a single item.
+        items = [
+            {
+                "title": "আজকের নির্বাচিত খবর",
+                "summary": text.strip(),
+                "url": "",
+                "source": "",
+            }
+        ]
+    return items[:TOP_N]
+
+
+def run_digest(chat_id=TELEGRAM_CHAT_ID):
+    """Fetch, summarize, store and deliver today's digest."""
+    articles = fetch_news()
+    if not articles:
+        raise RuntimeError("No news articles could be fetched.")
+    items = summarize_news(articles)
+    send_digest(chat_id, items)
+    return items
+
+
+# --------------------------------------------------------------------------- #
+# Telegram delivery
+# --------------------------------------------------------------------------- #
+def _telegram(method, payload, token=TELEGRAM_BOT_TOKEN, retries=3):
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set.")
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    last = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200:
+                return resp.json()
+            last = f"HTTP {resp.status_code}: {resp.text[:300]}"
+            log.error("Telegram %s failed: %s", method, last)
+        except requests.RequestException as exc:
+            last = exc
+            log.warning("Telegram %s error (attempt %d): %s", method, attempt, exc)
+        time.sleep(2 * attempt)
+    raise RuntimeError(f"Telegram {method} failed: {last}")
+
+
+def send_message(chat_id, text, reply_markup=None, token=TELEGRAM_BOT_TOKEN):
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    return _telegram("sendMessage", payload, token=token)
+
+
+def send_reply_keyboard(chat_id, token=TELEGRAM_BOT_TOKEN):
+    return send_message(
+        chat_id,
+        "নিচের মেনু থেকে গতকালের খবর বা আপনার ফেভারিট দেখতে পারেন।",
+        reply_markup=REPLY_KEYBOARD,
+        token=token,
+    )
+
+
 def _split_message(text, limit=TELEGRAM_MESSAGE_LIMIT):
-    """Split long text into chunks that fit Telegram's message limit."""
     chunks = []
     while text:
         if len(text) <= limit:
@@ -188,46 +313,76 @@ def _split_message(text, limit=TELEGRAM_MESSAGE_LIMIT):
     return chunks
 
 
-def send_telegram(text, token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID, retries=3):
-    """Send the digest to the configured Telegram chat, splitting if needed."""
-    if not token or not chat_id:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set.")
+def build_item_keyboard(article_id, url, saved=False):
+    """Inline keyboard: a URL button for the article and a callback save button.
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    When ``saved`` is True the callback button is shown in its "saved" state.
+    """
+    rows = []
+    if url:
+        rows.append([{"text": "📖 মূল সংবাদ পড়ুন", "url": url}])
+    if article_id is not None:
+        label = "✅ ফেভারিটে সংরক্ষিত" if saved else "⭐ ফেভারিট করুন"
+        rows.append([{"text": label, "callback_data": f"fav:{article_id}"}])
+    return {"inline_keyboard": rows}
 
-    for chunk in _split_message(text):
-        payload = {
-            "chat_id": chat_id,
-            "text": chunk,
-            "disable_web_page_preview": True,
-        }
-        for attempt in range(1, retries + 1):
-            try:
-                resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
-                if resp.status_code == 200:
-                    break
-                log.error(
-                    "Telegram HTTP %s: %s", resp.status_code, resp.text[:300]
-                )
-            except requests.RequestException as exc:
-                log.warning("Telegram send failed (attempt %d): %s", attempt, exc)
-            time.sleep(2 * attempt)
-        else:
-            raise RuntimeError("Failed to deliver message to Telegram.")
 
-    log.info("Digest delivered to Telegram chat %s", chat_id)
+def format_item(index, item):
+    parts = [f"{index}. {item.get('title', '').strip()}"]
+    summary = item.get("summary", "").strip()
+    if summary:
+        parts.append(summary)
+    if item.get("source"):
+        parts.append(f"সূত্র: {item['source']}")
+    return "\n".join(parts)
+
+
+def send_items(chat_id, items, header=None, token=TELEGRAM_BOT_TOKEN, show_save=True):
+    """Send a list of items, each with its own inline keyboard.
+
+    ``show_save`` controls whether the "save to favorites" callback button is
+    attached (disabled when re-sending favorites, whose ids are not article ids).
+    """
+    if header:
+        send_message(chat_id, header, token=token)
+    for index, item in enumerate(items, 1):
+        article_id = item.get("id") if show_save else None
+        send_message(
+            chat_id,
+            format_item(index, item),
+            reply_markup=build_item_keyboard(article_id, item.get("url")),
+            token=token,
+        )
+
+
+def send_digest(chat_id=TELEGRAM_CHAT_ID, items=None, digest_date=None):
+    """Persist and deliver a digest with buttons and the persistent menu."""
+    if items is None:
+        items = run_digest(chat_id)
+    digest_date = digest_date or db.today_str()
+
+    article_ids = db.save_digest(chat_id, digest_date, items)
+    for item, article_id in zip(items, article_ids):
+        item["id"] = article_id
+
+    send_items(
+        chat_id,
+        items,
+        header=f"🗞️ আজকের নির্বাচিত খবর — {digest_date}\n"
+        f"সবচেয়ে গুরুত্বপূর্ণ {len(items)}টি সংবাদ:",
+    )
+    send_reply_keyboard(chat_id)
+    log.info("Digest delivered to Telegram chat %s (%d items)", chat_id, len(items))
+    return items
 
 
 # --------------------------------------------------------------------------- #
-# Main
+# Entry point
 # --------------------------------------------------------------------------- #
 def main():
     try:
-        articles = fetch_news()
-        if not articles:
-            raise RuntimeError("No news articles could be fetched.")
-        digest = summarize_news(articles)
-        send_telegram(digest)
+        db.init_db()
+        run_digest()
         log.info("Done.")
     except Exception as exc:
         log.error("Run failed: %s", exc)
