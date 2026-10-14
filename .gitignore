@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Virtualenv
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Logs
+cron.log
+*.log
