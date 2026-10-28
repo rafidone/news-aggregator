@@ -3,10 +3,10 @@
 Runs a continuous long-polling loop (``getUpdates``) so that button clicks are
 processed instantly:
 
-* inline "⭐ ফেভারিট করুন" callback buttons on each news item are saved to the
+* inline "⭐ Save Favorite" callback buttons on each news item are saved to the
   user's favorites (keyed by their Telegram user id) and acknowledged;
-* the persistent reply keyboard provides "📅 আজকের খবর", "📅 গতকালের খবর"
-  and "⭐ আমার ফেভারিট".
+* the persistent reply keyboard provides "📅 Today's News", "📅 Yesterday's News"
+  and "⭐ My Favorites".
 
 The one-shot digest (``main.py``) can keep running from cron / GitHub Actions;
 this worker just listens for user interactions.
@@ -43,23 +43,23 @@ LONG_POLL_TIMEOUT = int(os.getenv("LONG_POLL_TIMEOUT", "25"))
 POLL_REQUEST_TIMEOUT = int(os.getenv("POLL_REQUEST_TIMEOUT", str(LONG_POLL_TIMEOUT + 15)))
 
 WELCOME_TEXT = (
-    "🗞️ বাংলা সংবাদ সংগ্রাহকে স্বাগতম!\n\n"
-    "নিচের মেনু ব্যবহার করে আপনি:\n"
-    f"• {MENU_TODAY} — আজকের সংবাদ দেখতে পারবেন\n"
-    f"• {MENU_PREVIOUS} — গতকালের সংবাদ দেখতে পারবেন\n"
-    f"• {MENU_FAVORITES} — আপনার সংরক্ষিত সংবাদ দেখতে পারবেন\n\n"
-    "যেকোনো সংবাদের নিচে “⭐ ফেভারিট করুন” চাপলে সেটি এখানে সংরক্ষিত হবে।"
+    "🗞️ Welcome to the Bengali News Aggregator!\n\n"
+    "Use the menu below:\n"
+    f"• {MENU_TODAY} — View today's news\n"
+    f"• {MENU_PREVIOUS} — View yesterday's news\n"
+    f"• {MENU_FAVORITES} — View your saved favorites\n\n"
+    "Tap “⭐ Save Favorite” below any article to save it here."
 )
 
 TODAY_GENERATING_TEXT = (
-    "⏳ আজকের খবর তৈরি করা হচ্ছে। Gemini সারসংক্ষেপ তৈরি করতে কয়েক মিনিট "
-    "সময় নিতে পারে; শেষ হলে খবরগুলো পাঠিয়ে দেওয়া হবে।"
+    "⏳ Generating today's news. This may take a few minutes while Gemini "
+    "summarizes the stories; you'll receive them shortly."
 )
-TODAY_BUSY_TEXT = "⏳ আজকের খবর ইতিমধ্যে তৈরি হচ্ছে। শেষ হলে পাঠিয়ে দেওয়া হবে।"
-TODAY_ERROR_TEXT = "⚠️ আজকের খবর তৈরি করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।"
+TODAY_BUSY_TEXT = "⏳ Today's news is already being generated. You'll receive it shortly."
+TODAY_ERROR_TEXT = "⚠️ Failed to generate today's news. Please try again in a moment."
 
-EMPTY_PREVIOUS_TEXT = "📭 গতকালের কোনো সংবাদ পাওয়া যায়নি। আজকের ডাইজেস্ট পাঠানোর পরে আবার দেখুন।"
-EMPTY_FAVORITES_TEXT = "⭐ আপনি এখনো কোনো সংবাদ ফেভারিটে সংরক্ষণ করেননি।"
+EMPTY_PREVIOUS_TEXT = "📭 No news found for yesterday. Check again after today's digest has been sent."
+EMPTY_FAVORITES_TEXT = "⭐ You haven't saved any favorites yet. Tap “⭐ Save Favorite” on an article to add one."
 
 _generating_chats = set()
 _generating_lock = threading.Lock()
@@ -225,7 +225,7 @@ def _send_today_digest(chat_id, user_id):
     main.send_items(
         chat_id,
         digest["items"],
-        header=f"📅 আজকের নির্বাচিত খবর — {digest['date']}:",
+        header=f"📅 Today's News — {digest['date']}:",
     )
     log.info(
         "Today's digest sent to chat=%s: date=%s items=%d",
@@ -283,21 +283,21 @@ def handle_callback(callback):
     if data.startswith(FAVORITE_PREFIX):
         target = _parse_callback_target(data, FAVORITE_PREFIX)
         if not target:
-            answer_callback(callback_id, "⚠️ অজানা রিকোয়েস্ট।")
+            answer_callback(callback_id, "⚠️ Unknown request.")
             return
         _, article_id = target
 
         article = _resolve_article(article_id, message)
         if not article or not article.get("title"):
-            answer_callback(callback_id, "⚠️ সংবাদটি আর পাওয়া যাচ্ছে না।")
+            answer_callback(callback_id, "⚠️ Article no longer available.")
             return
 
         if db.add_favorite(user_id, article):
             log.info("Favorite saved: user=%s article=%s", user_id, article_id)
-            answer_callback(callback_id, "⭐ ফেভারিটে সংরক্ষণ করা হয়েছে।")
+            answer_callback(callback_id, "⭐ Saved to favorites.")
         else:
             log.info("Favorite already exists: user=%s article=%s", user_id, article_id)
-            answer_callback(callback_id, "✅ এটি আগেই ফেভারিটে আছে।")
+            answer_callback(callback_id, "✅ Already in favorites.")
 
         favorite_id = db.get_favorite_id(user_id, article)
         if chat_id and message_id is not None:
@@ -316,7 +316,7 @@ def handle_callback(callback):
     if data.startswith(UNFAVORITE_PREFIX):
         target = _parse_callback_target(data, UNFAVORITE_PREFIX)
         if not target:
-            answer_callback(callback_id, "⚠️ অজানা রিকোয়েস্ট।")
+            answer_callback(callback_id, "⚠️ Unknown request.")
             return
         kind, target_id = target
 
@@ -338,7 +338,7 @@ def handle_callback(callback):
         else:
             article = _resolve_article(target_id, message)
             if not article or not article.get("title"):
-                answer_callback(callback_id, "⚠️ সংবাদটি আর পাওয়া যাচ্ছে না।")
+                answer_callback(callback_id, "⚠️ Article no longer available.")
                 return
 
             # Match the favorite by the article shown in the message. This is
@@ -367,9 +367,9 @@ def handle_callback(callback):
                 )
 
         if removed:
-            answer_callback(callback_id, "❌ ফেভারিট থেকে সরানো হয়েছে।")
+            answer_callback(callback_id, "❌ Removed from favorites.")
         else:
-            answer_callback(callback_id, "ℹ️ এটি ফেভারিটে নেই।")
+            answer_callback(callback_id, "ℹ️ Not in favorites.")
         return
 
     answer_callback(callback_id)
@@ -418,7 +418,7 @@ def handle_message(message):
         main.send_items(
             chat_id,
             digest["items"],
-            header=f"📅 {digest['date']} তারিখের নির্বাচিত খবর:",
+            header=f"📅 Yesterday's News — {digest['date']}:",
         )
         return
 
@@ -432,7 +432,7 @@ def handle_message(message):
         main.send_items(
             chat_id,
             favorites,
-            header=f"⭐ আপনার সংরক্ষিত সংবাদ ({len(favorites)}টি):",
+            header=f"⭐ My Favorites ({len(favorites)}):",
             show_save=False,
             show_remove=True,
         )

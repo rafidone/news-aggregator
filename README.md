@@ -1,43 +1,45 @@
-# Bengali News Aggregator Bot
+# Bengali News Aggregator Telegram Bot | news-aggregator | telegram-bot | python | gemini-api
 
-A Telegram bot that fetches the latest Bengali news, summarizes top stories with Google's Gemini AI, and delivers them in a clean, interactive format. It supports daily digests, history browsing, and personal favorites.
+A smart, interactive **Bengali news aggregator** Telegram bot built with **Python**, **Telegram Bot API**, **Google Gemini API**, and **SQLite**. It fetches top Bengali headlines, summarizes them using AI, and delivers a clean, interactive news experience with favorites, history, and on-demand updates.
 
 ## Key Features
 
-- **AI-Powered Summaries** – Automatically selects and summarizes the top news using Google Gemini with automatic fallback model support.
-- **Interactive Inline Buttons** – Every article comes with "📖 মূল সংবাদ পড়ুন" (Read More) and a favorite toggle button.
-- **Today's News** – Fetch or generate today's digest on-demand from the reply keyboard.
-- **Yesterday's History** – Browse previously sent digests using "📅 গতকালের খবর".
-- **Favorite Bookmarking** – Save articles with "⭐ ফেভারিট করুন" and manage them with "❌ ফেভারিট সরান".
-- **Persistent Menu** – Easy navigation with a bottom reply keyboard.
-- **Background Service** – Runs continuously via systemd for instant button responses.
-- **Local Scheduling** – Automated daily digests with cron.
+- **AI-Powered Bengali News Summaries** – Uses Google Gemini to curate and summarize the top stories in Bengali.
+- **Interactive Inline Buttons** – Every article includes "📖 Read Article", "⭐ Save Favorite", and "❌ Remove Favorite".
+- **Today's News On-Demand** – Instantly view or generate today's top news from the menu.
+- **Yesterday's News History** – Browse previously sent digests anytime.
+- **Favorites Management** – Save, view, and remove favorite articles with one tap.
+- **Persistent Reply Menu** – Clean, English-language navigation at the bottom of the chat.
+- **24/7 Background Bot** – Runs as a systemd service for instant responses.
+- **Automated Daily Digest** – Schedule with cron to send fresh news every morning.
+- **SQLite Storage** – Lightweight local database for history and per-user favorites.
 
 ## Tech Stack
 
-- **Python 3.12+**
-- **[python-telegram-bot-style API](https://core.telegram.org/bots/api)** (using `requests` for direct Bot API calls)
-- **[Google Gemini API](https://ai.google.dev/)** (`google-genai`)
-- **SQLite** for digest history and favorites
-- **[feedparser](https://feedparser.readthedocs.io/)** for RSS aggregation
-- **[python-dotenv](https://pypi.org/project/python-dotenv/)** for configuration
+- **[Python](https://www.python.org/)** – Core language
+- **[Telegram Bot API](https://core.telegram.org/bots/api)** – Messaging and inline interactions
+- **[Google Gemini API](https://ai.google.dev/)** – AI summarization via `google-genai`
+- **[SQLite](https://www.sqlite.org/)** – Local storage
+- **[feedparser](https://feedparser.readthedocs.io/)** – RSS feed aggregation
+- **[requests](https://pypi.org/project/requests/)** – HTTP requests
+- **[python-dotenv](https://pypi.org/project/python-dotenv/)** – Environment configuration
 
 ## News Sources
 
-- Prothom Alo
-- The Daily Star (Bangla)
-- Banglanews24.com
-- Samakal
+- [Prothom Alo](https://www.prothomalo.com/)
+- [The Daily Star (Bangla)](https://bangla.thedailystar.net/)
+- [Banglanews24.com](https://www.banglanews24.com/)
+- [Samakal](https://samakal.com/)
 
 ## Project Structure
 
-```
+```text
 news-aggregator/
-├── bot.py        # Long-polling Telegram bot (handles buttons & menu)
+├── bot.py        # Long-polling Telegram bot (menu, buttons, callbacks)
 ├── main.py       # RSS fetching, Gemini summarization, digest delivery
-├── db.py         # SQLite models for digests and favorites
+├── db.py         # SQLite schema and data access for digests & favorites
 ├── deploy/
-│   └── news-bot.service  # Systemd unit file
+│   └── news-bot.service  # systemd service unit
 ├── requirements.txt
 ├── .env.example
 └── README.md
@@ -52,11 +54,12 @@ git clone https://github.com/rafidone/news-aggregator.git
 cd news-aggregator
 ```
 
-### 2. Create a Virtual Environment
+### 2. Create and Activate a Virtual Environment
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 ```
 
 ### 3. Install Dependencies
@@ -67,32 +70,30 @@ pip install -r requirements.txt
 
 ### 4. Configure Environment Variables
 
-Copy the example file and fill in your credentials:
-
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your values:
+Update `.env` with your credentials:
 
-| Variable | Description |
-| --- | --- |
-| `TELEGRAM_BOT_TOKEN` | Token from [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_CHAT_ID` | Your chat ID (can get from [@userinfobot](https://t.me/userinfobot)) |
-| `GEMINI_API_KEY` | API key from [Google AI Studio](https://aistudio.google.com/apikey) |
-| `GEMINI_MODEL` | Primary Gemini model (default: `gemini-3.5-flash`) |
-| `GEMINI_FALLBACK_MODELS` | Comma-separated fallback models |
-| `GEMINI_TIMEOUT` | Request timeout in seconds |
+| Variable | Required | Description |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_CHAT_ID` | Yes | Default chat ID for digests |
+| `GEMINI_API_KEY` | Yes | API key from [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | No | Primary model (default: `gemini-3.5-flash`) |
+| `GEMINI_FALLBACK_MODELS` | No | Comma-separated fallback models |
+| `GEMINI_TIMEOUT` | No | Timeout in seconds (default: `120`) |
 
-### 5. Run Locally
+### 5. Run the Bot
 
-**Run the bot (for interactive buttons):**
+**Start the interactive Telegram bot:**
 
 ```bash
 python bot.py
 ```
 
-**Send a one-time digest:**
+**Send a one-time news digest:**
 
 ```bash
 python main.py
@@ -100,49 +101,50 @@ python main.py
 
 ## Deployment
 
-### Systemd Service (Recommended for the interactive bot)
+### Run as a systemd Service
 
-1. Copy the service file:
-   ```bash
-   sudo cp deploy/news-bot.service /etc/systemd/system/news-bot.service
-   ```
-
-2. Reload and start:
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now news-bot.service
-   ```
-
-3. Check status/logs:
-   ```bash
-   sudo systemctl status news-bot.service
-   journalctl -u news-bot.service -f
-   ```
-
-### Cron Job (For automated daily digests)
-
-Add to your crontab (`crontab -e`) to send digests at 10:00 AM Asia/Dhaka:
-
-```cron
-0 10 * * * cd /path/to/news-aggregator && /path/to/news-aggregator/.venv/bin/python main.py >> cron.log 2>&1
+```bash
+sudo cp deploy/news-bot.service /etc/systemd/system/news-bot.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now news-bot.service
 ```
 
-## Usage
+Monitor logs:
 
-Once the bot is running, open your Telegram chat with it and use the bottom menu:
+```bash
+sudo systemctl status news-bot.service
+journalctl -u news-bot.service -f
+```
 
-- **📅 আজকের খবর** – View or generate today's digest
-- **📅 গতকালের খবর** – Browse yesterday's (or most recent past) digest
-- **⭐ আমার ফেভারিট** – View your saved articles
+### Automate with Cron
 
-Tap **⭐ ফেভারিট করুন** on any article to save it, or **❌ ফেভারিট সরান** to remove it from favorites.
+Add this to `crontab -e` to send a daily digest at 10:00 AM Asia/Dhaka:
 
-## Security Notes
+```cron
+0 10 * * * cd /home/youruser/news-aggregator && /home/youruser/news-aggregator/.venv/bin/python main.py >> cron.log 2>&1
+```
 
-- All secrets are loaded from environment variables via `.env`. The `.env` file is gitignored.
-- Never commit API tokens, bot tokens, or chat IDs.
-- Use `.env.example` as a template with placeholder values.
+## How to Use
+
+1. Start the bot and send `/start`.
+2. Use the bottom menu:
+   - **📅 Today's News** – View or generate today's Bengali news digest
+   - **📅 Yesterday's News** – View the most recent previous digest
+   - **⭐ My Favorites** – Access your saved articles
+3. Tap **⭐ Save Favorite** on any article to bookmark it.
+4. Tap **❌ Remove Favorite** to remove it from your favorites list.
+5. Tap **📖 Read Article** to open the full story in your browser.
+
+## Security
+
+- All secrets are stored in `.env` and are excluded from version control via `.gitignore`.
+- Only placeholder values are present in `.env.example`.
+- Never commit tokens, API keys, or chat IDs.
+
+## Keywords
+
+`news-aggregator`, `telegram-bot`, `python`, `gemini-api`, `google-gemini`, `bengali-news`, `bangla-news`, `rss-aggregator`, `ai-news-summary`, `sqlite`, `news-bot`, `telegram-news-bot`
 
 ## License
 
-This project is open source. Feel free to use and modify it as needed.
+This project is open-source. Feel free to fork, modify, and use it for your own purposes.

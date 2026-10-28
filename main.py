@@ -50,9 +50,9 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 # Persistent reply-keyboard menu labels (also used as message filters in bot.py)
-MENU_TODAY = "📅 আজকের খবর"
-MENU_PREVIOUS = "📅 গতকালের খবর"
-MENU_FAVORITES = "⭐ আমার ফেভারিট"
+MENU_TODAY = "📅 Today's News"
+MENU_PREVIOUS = "📅 Yesterday's News"
+MENU_FAVORITES = "⭐ My Favorites"
 REPLY_KEYBOARD = {
     "keyboard": [
         [{"text": MENU_PREVIOUS}, {"text": MENU_FAVORITES}],
@@ -297,7 +297,7 @@ def send_message(chat_id, text, reply_markup=None, token=TELEGRAM_BOT_TOKEN):
 def send_reply_keyboard(chat_id, token=TELEGRAM_BOT_TOKEN):
     return send_message(
         chat_id,
-        "নিচের মেনু থেকে আজকের বা গতকালের খবর এবং আপনার ফেভারিট দেখতে পারেন।",
+        "Use the menu below to browse today's news, yesterday's news, or your favorites.",
         reply_markup=REPLY_KEYBOARD,
         token=token,
     )
@@ -326,13 +326,13 @@ def build_item_keyboard(article_id, url, saved=False, favorite_id=None):
     """
     rows = []
     if url:
-        rows.append([{"text": "📖 মূল সংবাদ পড়ুন", "url": url}])
+        rows.append([{"text": "📖 Read Article", "url": url}])
 
     if favorite_id is not None:
         rows.append(
             [
                 {
-                    "text": "❌ ফেভারিট সরান",
+                    "text": "❌ Remove Favorite",
                     "callback_data": f"unfav:f:{favorite_id}",
                 }
             ]
@@ -342,7 +342,7 @@ def build_item_keyboard(article_id, url, saved=False, favorite_id=None):
             rows.append(
                 [
                     {
-                        "text": "❌ ফেভারিট সরান",
+                        "text": "❌ Remove Favorite",
                         "callback_data": f"unfav:a:{article_id}",
                     }
                 ]
@@ -351,7 +351,7 @@ def build_item_keyboard(article_id, url, saved=False, favorite_id=None):
             rows.append(
                 [
                     {
-                        "text": "⭐ ফেভারিট করুন",
+                        "text": "⭐ Save Favorite",
                         "callback_data": f"fav:{article_id}",
                     }
                 ]
@@ -443,8 +443,8 @@ def send_digest(chat_id=TELEGRAM_CHAT_ID, items=None, digest_date=None):
     send_items(
         chat_id,
         items,
-        header=f"🗞️ আজকের নির্বাচিত খবর — {digest_date}\n"
-        f"সবচেয়ে গুরুত্বপূর্ণ {len(items)}টি সংবাদ:",
+        header=f"🗞️ Today's Top News — {digest_date}\n"
+        f"Top {len(items)} stories:",
     )
     send_reply_keyboard(chat_id)
     log.info("Digest delivered to Telegram chat %s (%d items)", chat_id, len(items))
