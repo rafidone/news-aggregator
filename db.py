@@ -195,13 +195,70 @@ def add_favorite(chat_id, item, path=DB_PATH):
     return True
 
 
+def get_favorite_id(chat_id, item, path=DB_PATH):
+    """Return the favorites row id for an item, or None if it is not saved."""
+    url = (item.get("url") or "").strip()
+    title = (item.get("title") or "").strip()
+    with connect(path) as conn:
+        if url:
+            row = conn.execute(
+                """
+                SELECT id FROM favorites
+                WHERE chat_id = ? AND url = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (str(chat_id), url),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT id FROM favorites
+                WHERE chat_id = ? AND url = '' AND title = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (str(chat_id), title),
+            ).fetchone()
+    return row["id"] if row else None
+
+
+def remove_favorite_by_id(chat_id, favorite_id, path=DB_PATH):
+    """Delete one favorites row by its id. Returns True if a row was removed."""
+    with connect(path) as conn:
+        cur = conn.execute(
+            "DELETE FROM favorites WHERE id = ? AND chat_id = ?",
+            (favorite_id, str(chat_id)),
+        )
+    return cur.rowcount > 0
+
+
+def remove_favorite(chat_id, article_id, path=DB_PATH):
+    """Remove the saved favorite for an article id. Returns True if removed.
+
+    Favorites are keyed by URL (or title when an article has no URL), so the
+    article is looked up first and then its favorites row is deleted.
+    """
+    article = get_article(article_id, path=path)
+    if not article:
+        return False
+    favorite_id = get_favorite_id(chat_id, article, path=path)
+    if favorite_id is None:
+        return False
+    return remove_favorite_by_id(chat_id, favorite_id, path=path)
+
+
+def _row_to_favorite(row):
+    item = _row_to_item(row)
+    item["favorite_id"] = row["id"]
+    return item
+
+
 def list_favorites(chat_id, path=DB_PATH):
     with connect(path) as conn:
         rows = conn.execute(
             "SELECT * FROM favorites WHERE chat_id = ? ORDER BY created_at DESC",
             (str(chat_id),),
         ).fetchall()
-    return [_row_to_item(r) for r in rows]
+    return [_row_to_favorite(r) for r in rows]
 
 
 def count_favorites(chat_id, path=DB_PATH):

@@ -20,9 +20,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=rafid
-WorkingDirectory=/home/rafid/Auto Work/news-aggregator
-EnvironmentFile=-/home/rafid/Auto Work/news-aggregator/.env
-ExecStart="/home/rafid/Auto Work/news-aggregator/.venv/bin/python" "/home/rafid/Auto Work/news-aggregator/bot.py"
+WorkingDirectory=/home/rafid/Work/news-aggregator
+EnvironmentFile=-/home/rafid/Work/news-aggregator/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/rafid/Work/news-aggregator/.venv/bin/python /home/rafid/Work/news-aggregator/bot.py
 Restart=always
 RestartSec=5
 

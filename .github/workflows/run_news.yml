@@ -1,9 +1,10 @@
-name: Daily News Digest
+name: Manual News Digest
+
+# The scheduled digest now runs on the bot host (see crontab) so that the
+# SQLite history/favorites used by the interactive buttons persists between
+# runs. GitHub Actions keeps only a manual escape hatch.
 
 on:
-  schedule:
-    # 10:00 AM Asia/Dhaka (UTC+6) == 04:00 UTC
-    - cron: "0 4 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -29,7 +30,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_MODEL: gemini-3.8-flash
-          GEMINI_FALLBACK_MODELS: gemini-flash-latest,gemini-3.7-flash
+          GEMINI_MODEL: gemini-3.5-flash
+          GEMINI_FALLBACK_MODELS: gemini-3.8-flash,gemini-3.7-flash,gemini-flash-latest
           GEMINI_TIMEOUT: "120"
         run: python main.py

@@ -50,10 +50,14 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 # Persistent reply-keyboard menu labels (also used as message filters in bot.py)
+MENU_TODAY = "📅 আজকের খবর"
 MENU_PREVIOUS = "📅 গতকালের খবর"
 MENU_FAVORITES = "⭐ আমার ফেভারিট"
 REPLY_KEYBOARD = {
-    "keyboard": [[{"text": MENU_PREVIOUS}, {"text": MENU_FAVORITES}]],
+    "keyboard": [
+        [{"text": MENU_PREVIOUS}, {"text": MENU_FAVORITES}],
+        [{"text": MENU_TODAY}],
+    ],
     "resize_keyboard": True,
     "is_persistent": True,
 }
@@ -293,7 +297,7 @@ def send_message(chat_id, text, reply_markup=None, token=TELEGRAM_BOT_TOKEN):
 def send_reply_keyboard(chat_id, token=TELEGRAM_BOT_TOKEN):
     return send_message(
         chat_id,
-        "নিচের মেনু থেকে গতকালের খবর বা আপনার ফেভারিট দেখতে পারেন।",
+        "নিচের মেনু থেকে আজকের বা গতকালের খবর এবং আপনার ফেভারিট দেখতে পারেন।",
         reply_markup=REPLY_KEYBOARD,
         token=token,
     )
@@ -313,18 +317,60 @@ def _split_message(text, limit=TELEGRAM_MESSAGE_LIMIT):
     return chunks
 
 
-def build_item_keyboard(article_id, url, saved=False):
-    """Inline keyboard: a URL button for the article and a callback save button.
+def build_item_keyboard(article_id, url, saved=False, favorite_id=None):
+    """Build the inline keyboard for a news item.
 
-    When ``saved`` is True the callback button is shown in its "saved" state.
+    The second button toggles between "save" and "remove". When a
+    ``favorite_id`` is known (messages in the favorites list), removal targets
+    that favorites row directly; otherwise removal targets the article id.
     """
     rows = []
     if url:
         rows.append([{"text": "📖 মূল সংবাদ পড়ুন", "url": url}])
-    if article_id is not None:
-        label = "✅ ফেভারিটে সংরক্ষিত" if saved else "⭐ ফেভারিট করুন"
-        rows.append([{"text": label, "callback_data": f"fav:{article_id}"}])
+
+    if favorite_id is not None:
+        rows.append(
+            [
+                {
+                    "text": "❌ ফেভারিট সরান",
+                    "callback_data": f"unfav:f:{favorite_id}",
+                }
+            ]
+        )
+    elif article_id is not None:
+        if saved:
+            rows.append(
+                [
+                    {
+                        "text": "❌ ফেভারিট সরান",
+                        "callback_data": f"unfav:a:{article_id}",
+                    }
+                ]
+            )
+        else:
+            rows.append(
+                [
+                    {
+                        "text": "⭐ ফেভারিট করুন",
+                        "callback_data": f"fav:{article_id}",
+                    }
+                ]
+            )
+
     return {"inline_keyboard": rows}
+
+
+def mark_saved_items(items, user_id):
+    """Set ``item['saved']`` for items already favorited by the user."""
+    favorites = db.list_favorites(user_id)
+    saved_urls = {f["url"] for f in favorites if f.get("url")}
+    saved_titles = {f["title"] for f in favorites if not f.get("url")}
+    for item in items:
+        if item.get("url"):
+            item["saved"] = item["url"] in saved_urls
+        else:
+            item["saved"] = item.get("title", "") in saved_titles
+    return items
 
 
 def format_item(index, item):
@@ -337,20 +383,45 @@ def format_item(index, item):
     return "\n".join(parts)
 
 
-def send_items(chat_id, items, header=None, token=TELEGRAM_BOT_TOKEN, show_save=True):
-    """Send a list of items, each with its own inline keyboard.
+def send_items(
+    chat_id,
+    items,
+    header=None,
+    token=TELEGRAM_BOT_TOKEN,
+    show_save=True,
+    show_remove=False,
+):
+    """Send items with inline keyboards.
 
-    ``show_save`` controls whether the "save to favorites" callback button is
-    attached (disabled when re-sending favorites, whose ids are not article ids).
+    ``show_save`` shows the save/remove toggle for regular news. ``show_remove``
+    is used when re-sending the favorites list and always shows the remove
+    button for each saved item.
     """
     if header:
         send_message(chat_id, header, token=token)
     for index, item in enumerate(items, 1):
-        article_id = item.get("id") if show_save else None
+        if show_remove:
+            article_id = None
+            favorite_id = item.get("favorite_id")
+            saved = True
+        elif show_save:
+            article_id = item.get("id")
+            favorite_id = None
+            saved = bool(item.get("saved"))
+        else:
+            article_id = None
+            favorite_id = None
+            saved = False
+
         send_message(
             chat_id,
             format_item(index, item),
-            reply_markup=build_item_keyboard(article_id, item.get("url")),
+            reply_markup=build_item_keyboard(
+                article_id,
+                item.get("url"),
+                saved=saved,
+                favorite_id=favorite_id,
+            ),
             token=token,
         )
 
@@ -364,6 +435,10 @@ def send_digest(chat_id=TELEGRAM_CHAT_ID, items=None, digest_date=None):
     article_ids = db.save_digest(chat_id, digest_date, items)
     for item, article_id in zip(items, article_ids):
         item["id"] = article_id
+
+    # On a repeated digest (for example after a retry) show already-saved
+    # articles in their "remove" state when the chat id is also the user id.
+    mark_saved_items(items, chat_id)
 
     send_items(
         chat_id,
