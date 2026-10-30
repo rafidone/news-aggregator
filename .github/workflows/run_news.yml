@@ -1,10 +1,9 @@
-name: Manual News Digest
-
-# The scheduled digest now runs on the bot host (see crontab) so that the
-# SQLite history/favorites used by the interactive buttons persists between
-# runs. GitHub Actions keeps only a manual escape hatch.
+name: Daily News Digest
 
 on:
+  schedule:
+    # 10:00 AM Asia/Dhaka (UTC+6) == 04:00 UTC
+    - cron: "0 4 * * *"
   workflow_dispatch: {}
 
 jobs:
