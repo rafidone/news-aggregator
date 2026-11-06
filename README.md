@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🗞️ Bengali News Aggregator Bot
+# Bengali News Aggregator Bot
 
-**AI-powered Bengali news digests on Telegram — curated, summarized, and delivered automatically.**
+AI-powered Bengali news digests on Telegram — curated, summarized, and delivered automatically.
 
 [![Daily News Digest](https://github.com/rafidone/news-aggregator/actions/workflows/run_news.yml/badge.svg?branch=main)](https://github.com/rafidone/news-aggregator/actions/workflows/run_news.yml)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -11,33 +11,31 @@
 [![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
-<br />
-
-[Overview](#-overview) • [Features](#-features) • [Tech Stack](#-tech-stack) • [Quick Start](#-quick-start) • [Deployment](#-deployment) • [Security](#-security)
+[Overview](#overview) • [Features](#features) • [Tech Stack](#tech-stack) • [Quick Start](#quick-start) • [Deployment](#deployment) • [Security](#security)
 
 </div>
 
 ---
 
-## 📌 Overview
+## Overview
 
 **Bengali News Aggregator Bot** is a production-ready Telegram bot that collects top headlines from trusted Bengali news sources, uses **Google Gemini** to generate concise summaries, and delivers them with a clean interactive interface. Users can browse today's news, revisit yesterday's digest, and manage personal favorites — all from Telegram.
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 | --- | --- |
-| 🤖 **AI Summarization** | Curates and summarizes top Bengali stories using Google Gemini with fallback model support |
-| 📅 **Today's News** | View or generate today's digest on-demand from the menu |
-| 📅 **Yesterday's News** | Instantly access the most recent previous digest |
-| ⭐ **Favorites** | Save, view, and remove favorite articles with one tap |
-| 🔘 **Interactive Buttons** | Inline actions: **Read Article**, **Save Favorite**, **Remove Favorite** |
-| ⌨️ **Persistent Menu** | Easy navigation with an always-available reply keyboard |
-| ⏰ **Automated Delivery** | Daily digest via GitHub Actions (cloud) and/or local cron |
-| 🖥️ **Background Service** | Runs 24/7 as a systemd service for instant callback responses |
-| 💾 **Local Storage** | SQLite stores digest history and per-user favorites |
+| **AI Summarization** | Curates and summarizes top Bengali stories using Google Gemini with fallback model support |
+| **Today's News** | View or generate today's digest on-demand from the menu |
+| **Yesterday's News** | Instantly access the most recent previous digest |
+| **Favorites** | Save, view, and remove favorite articles with one tap |
+| **Interactive Buttons** | Inline actions: Read Article, Save Favorite, Remove Favorite |
+| **Persistent Menu** | Easy navigation with an always-available reply keyboard |
+| **Automated Delivery** | Daily digest via GitHub Actions (cloud) and/or local cron |
+| **Background Service** | Runs 24/7 as a systemd service for instant callback responses |
+| **Local Storage** | SQLite stores digest history and per-user favorites |
 
-## 🧰 Tech Stack
+## Tech Stack
 
 - **Language:** Python 3.12+
 - **Bot Platform:** Telegram Bot API
@@ -47,14 +45,14 @@
 - **Automation:** GitHub Actions, cron, systemd
 - **Config:** `python-dotenv`
 
-## 📰 News Sources
+## News Sources
 
 - [Prothom Alo](https://www.prothomalo.com/)
 - [The Daily Star (Bangla)](https://bangla.thedailystar.net/)
 - [Banglanews24.com](https://www.banglanews24.com/)
 - [Samakal](https://samakal.com/)
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 news-aggregator/
@@ -70,16 +68,16 @@ news-aggregator/
 └── README.md
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1) Clone the repository
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/rafidone/news-aggregator.git
 cd news-aggregator
 ```
 
-### 2) Set up a virtual environment
+### 2. Set up a virtual environment
 
 ```bash
 python3 -m venv .venv
@@ -87,13 +85,13 @@ source .venv/bin/activate  # Linux/macOS
 # .venv\Scripts\activate   # Windows
 ```
 
-### 3) Install dependencies
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4) Configure environment variables
+### 4. Configure environment variables
 
 ```bash
 cp .env.example .env
@@ -103,14 +101,14 @@ Update `.env` with your values:
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | ✅ | Bot token from [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_CHAT_ID` | ✅ | Default chat ID for scheduled digests |
-| `GEMINI_API_KEY` | ✅ | API key from [Google AI Studio](https://aistudio.google.com/apikey) |
-| `GEMINI_MODEL` | ❌ | Primary model (default: `gemini-3.5-flash`) |
-| `GEMINI_FALLBACK_MODELS` | ❌ | Comma-separated fallback models |
-| `GEMINI_TIMEOUT` | ❌ | Timeout in seconds (default: `120`) |
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_CHAT_ID` | Yes | Default chat ID for scheduled digests |
+| `GEMINI_API_KEY` | Yes | API key from [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | No | Primary model (default: `gemini-3.5-flash`) |
+| `GEMINI_FALLBACK_MODELS` | No | Comma-separated fallback models |
+| `GEMINI_TIMEOUT` | No | Timeout in seconds (default: `120`) |
 
-### 5) Run locally
+### 5. Run locally
 
 ```bash
 # Interactive bot (buttons, menus, favorites)
@@ -120,7 +118,7 @@ python bot.py
 python main.py
 ```
 
-## ⚙️ Deployment
+## Deployment
 
 ### GitHub Actions (Cloud Scheduler)
 
@@ -154,28 +152,22 @@ HOME=/home/youruser
 0 10 * * * cd /home/youruser/news-aggregator && . /home/youruser/news-aggregator/.env && /home/youruser/news-aggregator/.venv/bin/python main.py >> /home/youruser/news-aggregator/cron.log 2>&1
 ```
 
-## 📱 Usage
+## Usage
 
 1. Start a chat with your bot and send `/start`.
-2. Use the menu:
-   - **📅 Today's News** – View or generate today's digest
-   - **📅 Yesterday's News** – Browse the previous digest
-   - **⭐ My Favorites** – View saved articles
-3. Use inline buttons:
-   - **📖 Read Article** – Open the full story
-   - **⭐ Save Favorite** – Bookmark an article
-   - **❌ Remove Favorite** – Remove from favorites
+2. Use the menu: **Today's News**, **Yesterday's News**, **My Favorites**.
+3. Use inline buttons: **Read Article**, **Save Favorite**, **Remove Favorite**.
 
-## 🔒 Security
+## Security
 
 - Secrets are stored in `.env` (gitignored) or GitHub Actions secrets.
 - `.env.example` contains placeholders only — never commit real credentials.
 - `.gitignore` excludes `.env`, local databases, logs, and virtual environments.
 
-## 🏷️ Topics
+## Topics
 
 `news` • `news-aggregator` • `telegram-bot` • `python` • `gemini-api` • `sqlite` • `bengali-news` • `automation` • `bot`
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License**. You are free to use, modify, and distribute it.
